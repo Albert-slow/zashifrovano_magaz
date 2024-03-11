@@ -17,11 +17,12 @@ users ={}
 def start(message):
     user_id = message.from_user.id
     check = db.check_user(user_id)
-    prods = db.get_pr()
+    products = db.get_pr()
     if check:
+        prods = db.get_pr()
         bot.send_message(user_id, 'Добро пожаловать в наш магазин!', reply_markup=telebot.types.ReplyKeyboardRemove())
         bot.send_message(user_id, 'Выберите товар:',
-                         reply_markup=bt.main_menu_buttons(prods))
+                         reply_markup=bt.main_menu_buttons(products))
     else:
         bot.send_message(user_id, 'Здравствуйте! Давайте проведем регистрацию! Напишите своё имя', reply_markup=telebot.types.ReplyKeyboardRemove())
         bot.register_next_step_handler(message, get_name)
@@ -49,86 +50,93 @@ def get_number(message, user_name):
 def get_location(message, user_name, user_number):
     user_id = message.from_user.id
     if message.location:
-        user_location = geolocator.reverse(f'{message.location.latitude}, {message.location.longitude}')
-        db.register(user_id, user_name, user_number, str(user_location))
-        bot.send_message(user_id, 'Регистрация прошла успешно!')
+        user_location = str(geolocator.reverse(f'{message.location.latitude}, {message.location.longitude}'))
+        db.register(user_id, user_name, user_number, user_location)
+        products = db.get_pr()
+        bot.send_message(user_id, 'Регистрация прошла успешно! Выберите товар: ', reply_markup=bt.main_menu_buttons(products))
     else:
         bot.send_message(user_id, 'Отправьте локацию через кнопку!', reply_markup=bt.loc_button())
         bot.register_next_step_handler(message, get_location, user_name, user_number)
 
 
+# Функция выбора количества
 @bot.callback_query_handler(lambda call: call.data in ['increment', 'decrement', 'to_cart', 'back'])
 def choose_pr_amount(call):
     chat_id = call.message.chat.id
     if call.data == 'increment':
         new_amount = users[chat_id]['pr_count']
-        new_amount += 1
-        bot.edit_message_reply_markup(chat_id=chat_id, message_id=call.message.message.id,
+        users[chat_id]['pr_count'] += 1
+        bot.edit_message_reply_markup(chat_id=chat_id, message_id=call.message.message_id,
                                       reply_markup=bt.count_buttons(new_amount, 'increment'))
     elif call.data == 'decrement':
         new_amount = users[chat_id]['pr_count']
-        new_amount -= 1
-        bot.edit_message_reply_markup(chat_id=chat_id, message_id=call.message.message.id,
+        users[chat_id]['pr_count'] -= 1
+        bot.edit_message_reply_markup(chat_id=chat_id, message_id=call.message.message_id,
                                       reply_markup=bt.count_buttons(new_amount, 'decrement'))
     elif call.data == 'back':
-        prods = db.get_pr()
-        bot.delete_message(chat_id=chat_id, message_id=call.message.message.id)
+        products = db.get_pr()
+        bot.delete_message(chat_id=chat_id, message_id=call.message.message_id)
         bot.send_message(chat_id, 'Возвращаю вас обратно в меню',
-                         reply_markup=bt.main_menu_buttons(prods))
+                         reply_markup=bt.main_menu_buttons(products))
     elif call.data == 'to_cart':
-        products = db.get_exact_pr(users[chat_id]['pr_name'])
+        producs = db.get_exact_pr(users[chat_id]['pr_name'])
         pr_amount = users[chat_id]['pr_count']
-        total = product[3] * pr_amount
-        db.add_pr_to_cart(chat_id=chat_id, message_id=call.message.message.id)
-        bot.send_message(chat_id, 'Товар успешно добавлен в корзинуб что хотите сделать?', reply_markup=bt.cart_buttons())
+        total = producs[3] * pr_amount
+        db.add_pr_to_cart(chat_id, producs[0], pr_amount, total)
+        bot.delete_message(chat_id=chat_id, message_id=call.message.message_id)
+        bot.send_message(chat_id, 'Товар успешно добавлен в корзину, что хотите сделать?', reply_markup=bt.cart_buttons())
 
 
+# Корзина
 @bot.callback_query_handler(lambda call: call.data in ['cart', 'order', 'back', 'clear'])
 def cart_handle(call):
     chat_id = call.message.chat.id
+    products = db.get_pr()
+
     if call.data == 'cart':
         cart = db.show_cart(chat_id)
-        text = f'Ваша корзина\n\n' \
-               f'Товар: {cart[1]}\n' \
-               f'Количество: {cart[2]}\n' \
-               f'Итого: sum{cart[3]}'
-        bot.delete_message(chat_id=chat_id, message_id=call.message.message.id)
+        text = f'Ваша корзина\n\n'\
+               f'Товар: {cart[1]}\n'\
+               f'Количество: {cart[2]}\n'\
+               f'Итого: sum{cart[3]}'\
+               f'Что хотите сделать?'
+        bot.delete_message(chat_id=chat_id, message_id=call.message.message_id)
         bot.send_message(chat_id, text, reply_markup=bt.cart_buttons())
     elif call.data == 'clear':
         db.clear_cart(chat_id)
-        prods = db.get_pr()
-        bot.delete_message(chat_id=chat_id, message_id=call.message.message.id)
-        bot.send_message(chat_id, 'Ваша корзина очищена!', reply_markup=bt.main_menu_buttons(prods))
+        products = db.get_pr()
+        bot.delete_message(chat_id=chat_id, message_id=call.message.message_id)
+        bot.send_message(chat_id, 'Ваша корзина очищена!', reply_markup=bt.main_menu_buttons(products))
     elif call.data == 'order':
-        prods = db.get_pr()
+        products = db.get_pr()
         cart = db.make_order(chat_id)
-        text = f'Новый заказ!\n\n' \
-               f'id пользователя: {cart[0][0]},\n' \
-               f'Товар: {cart[0][1]}\n' \
-               f'Количество: {cart[0][2]}\n' \
-               f'Общая сумма: сум{cart[0][3]}\n' \
+        text = f'Новый заказ!\n\n'\
+               f'id пользователя: {cart[0][0]},\n'\
+               f'Товар: {cart[0][1]}\n'\
+               f'Количество: {cart[0][2]}\n'\
+               f'Общая сумма: сум{cart[0][3]}\n'\
                f'Адресс: {cart[1][0]}'
         bot.send_message(admin_id, text)
-        bot.delete_message(chat_id=chat_id, message_id=call.message.message.id)
-        bot.send_message(chat_id, 'Заказ успешно оформлен, специалисты с вами свяжутся!', reply_markup=bt.main_menu_buttons(prods))
+        bot.delete_message(chat_id=chat_id, message_id=call.message.message_id)
+        bot.send_message(chat_id, 'Заказ успешно оформлен, специалисты скоро с вами свяжутся!', reply_markup=bt.main_menu_buttons(products))
     elif call.data == 'back':
-        prods = db.get_pr()
-        bot.delete_message(chat_id=chat_id, message_id=call.message.message.id)
+        products = db.get_pr()
+        bot.delete_message(chat_id=chat_id, message_id=call.message.message_id)
         bot.send_message(chat_id, 'Возвращаю вас обратно в меню',
-                         reply_markup=bt.main_menu_buttons(prods))
+                         reply_markup=bt.main_menu_buttons(products))
 
 
-@bot.callback_query_handler(lambda call: int(call.data) in db.get_pr())
+@bot.callback_query_handler(lambda call: int(call.data) in db.get_pr_name_id())
 def get_product(call):
     chat_id = call.message.chat.id
     exact_product = db.get_exact_pr(int(call.data))
     users[chat_id] = {'pr_name': call.data, 'pr_count': 1}
-    bot.delete_message(chat_id=chat_id, message_id=call.message.message.id)
+    bot.delete_message(chat_id=chat_id, message_id=call.message.message_id)
     bot.send_photo(chat_id, photo=exact_product[4],
-                   caption=f'{exact_product[0]}, \n\n'
+                   caption=f'Название: {exact_product[0]},\n\n'
                            f'Описание товара: {exact_product[1]}\n'
-                           f'Количество товара: {exact_product[2]}\n'
-                           f'Цена товара: {exact_product[3]}',
+                           f'Количество на складе: {exact_product[2]}\n'
+                           f'Цена товара: sum{exact_product[3]}',
                    reply_markup=bt.count_buttons())
 
 
@@ -152,20 +160,27 @@ def admin_choise(message):
     elif message.text == 'Удалить продукт':
         pr_check = db.check_pr()
         if pr_check:
-            bot.send_message(admin_id, 'Введите id товара')
+            bot.send_message(admin_id, 'Введите id товара', reply_markup=telebot.types.ReplyKeyboardRemove())
             # Переход на этап получения id товара
-            bot.register_next_step_handler(message, get_pr_to_dell)
+            bot.register_next_step_handler(message, get_pr_to_del)
         else:
-            bot.send_message(admin_id, 'Продуктов нет!')
+            bot.send_message(admin_id, 'Продукта на складе нет!')
             bot.register_next_step_handler(message, admin_choice)
-    elif message.text == 'Изменить колличество продукта':
+    elif message.text == 'Изменить количество продукта':
         pr_check = db.check_pr()
         if pr_check:
-            bot.send_message(admin_id, 'Введите id товара')
+            bot.send_message(admin_id, 'Введите id товара', reply_markup=telebot.types.ReplyKeyboardRemove())
             bot.register_next_step_handler(message, get_pr_to_edit)
         else:
-            bot.send_message(admin_id, 'Продуктов нет!')
+            bot.send_message(admin_id, 'Продуктов на складе нет!')
             bot.register_next_step_handler(message, admin_choice)
+    elif message.text == 'Перейти в меню':
+        products = db.get_pr()
+        bot.send_message(admin_id, 'Поехали!', reply_markup=telebot.types.ReplyKeyboardRemove())
+        bot.send_message(admin_id, 'Добро пожаловать в меню!', reply_markup=bt.main_menu_buttons(products))
+    else:
+        bot.send_message(admin_id, 'Ошибка!', reply_markup=bt.admin_buttons())
+        bot.register_next_step_handler(message, admin_choise)
 
 
 def get_pr_name(message):
@@ -196,7 +211,7 @@ def get_pr_price(message, pr_name, pr_description, pr_count):
         bot.register_next_step_handler(message, get_pr_price, pr_name, pr_description, pr_count)
     else:
         pr_price = float(message.text)
-        bot.send_message(admin_id, 'Последний этап, зайдите на сайт https://postimages.org/ и загрузите туда фото.\n'
+        bot.send_message(admin_id, 'Последний этап, зайдите на сайт https://postimages.org/ru/ и загрузите туда фото товара.\n'
                                    'Затем, отправьте мне прямую ссылку на фото!')
         bot.register_next_step_handler(message, get_pr_photo, pr_name, pr_description, pr_count, pr_price)
 

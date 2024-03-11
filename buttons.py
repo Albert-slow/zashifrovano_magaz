@@ -22,7 +22,7 @@ def admin_buttons():
     add_pr = types.KeyboardButton('Добавить продукт')
     del_pr = types.KeyboardButton('Удалить продукт')
     edit_pr = types.KeyboardButton('Изменить количество продукта')
-    to_menu = types.KeyboardButton('На главную')
+    to_menu = types.KeyboardButton('Перейти в меню')
     kb.add(add_pr, edit_pr, del_pr)
     kb.row(to_menu)
     return kb
@@ -31,8 +31,8 @@ def admin_buttons():
 # создаём кнопки вывода товара
 def main_menu_buttons(all_prods):
     kb = types.InlineKeyboardMarkup(row_width=2)
-    prod_buttons = [types.InlineKeyboardButton(text=f'{i[1]}', callback_data=f'{i[0]}') for i in all_prods if i[2] > 0]
     cart = types.InlineKeyboardButton(text='Корзина', callback_data='cart')
+    prod_buttons = [types.InlineKeyboardButton(text=f'{i[1]}', callback_data=f'{i[0]}') for i in all_prods if i[2] > 0]
     kb.add(*prod_buttons)
     kb.row(cart)
     return kb
@@ -53,10 +53,10 @@ def count_buttons(amount=1, plus_or_minus=''):
         if amount > 1:
             amount -= 1
             current_amount = types.InlineKeyboardButton(text=str(amount), callback_data=amount)
-    kb.add(minus, current_ammount, plus)
+    kb.add(minus, current_amount, plus)
     kb.row(to_cart)
     kb.row(back)
-
+    return kb
 
 def cart_buttons():
     kb = types.InlineKeyboardMarkup(row_width=2)
